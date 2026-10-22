@@ -174,12 +174,34 @@ jobs:
           # memtool support
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
 
+          # ============================================================
+          # ⚠️ TL-WN722N / ath9k_htc: NO añadir aquí
+          # ============================================================
+          # El GKI estándar de Android 13-5.15 tiene mac80211/cfg80211
+          # deshabilitados (o eliminados) para evitar conflictos con la
+          # pila WiFi del vendor[citation:2][citation:6].
+          # Si añades ath9k_htc=m sin restaurar primero mac80211/cfg80211,
+          # la compilación fallará en la verificación de módulos.
+          #
+          # Si realmente quieres intentarlo, el orden correcto es:
+          # 1. Confirmar que tu TL-WN722N es v1 (AR9271)
+          # 2. Descomentar el bloque de abajo
+          # 3. Compilar, ver qué .ko faltan en modules.bzl, añadirlos
+          # 4. Volver a compilar
+          # 5. Y aun así, muy probablemente Android no lo reconozca
+          #
+          # echo "CONFIG_CFG80211=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_MAC80211=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_ATH_COMMON=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_ATH9K_HW=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_ATH9K_COMMON=m" >> "$CONFIG_FILE"
+          # echo "CONFIG_ATH9K_HTC=m" >> "$CONFIG_FILE"
+
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
           set -euo pipefail
-
           mkdir -p kernel/sched
           curl -sL -o kernel/sched/cpufreq_reflex.c \
             "https://raw.githubusercontent.com/kusonekoworld-max/KonekoKernel-GKI/refs/heads/main/.github/actions/build-kernel/patches/reflex/cpufreq_reflex.c"
@@ -208,7 +230,6 @@ jobs:
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
           set -euo pipefail
-
           mkdir -p kernel/sched
           curl -sL -o kernel/sched/cpufreq_vorpal.c \
             "https://raw.githubusercontent.com/yougotme101/KonekoKernel-GKI/refs/heads/main/.github/actions/build-kernel/patches/vorpal/cpufreq_vorpal.c"
@@ -218,7 +239,6 @@ jobs:
           if ! grep -q "cpufreq_vorpal.o" "kernel/sched/Makefile"; then
             echo 'obj-$(CONFIG_CPU_FREQ_GOV_VORPAL) += cpufreq_vorpal.o' >> "kernel/sched/Makefile"
           fi
-
           if ! grep -q "rfx_gki510_compat.o" "kernel/sched/Makefile"; then
             echo 'obj-y += rfx_gki510_compat.o' >> "kernel/sched/Makefile"
           fi
@@ -244,19 +264,15 @@ jobs:
         run: |
           set -euo pipefail
           VORPAL_C="kernel/sched/cpufreq_vorpal.c"
-
           if ! grep -q "bool input_ok;" "$VORPAL_C"; then
            perl -0pi -e 's{(static int __init vorpal_gov_init\(void\)\n\{\n\tint ret;\n)}{$1\tbool input_ok;\n}' "$VORPAL_C"
           fi
-
           if ! grep -q "input_ok = !input_register_handler" "$VORPAL_C"; then
             perl -0pi -e 's{\tif \(input_register_handler\(&rfx_input_handler\)\)\n\t\tpr_warn\("vorpal: input handler register failed \(touch boost off\)\\n"\);}{\tinput_ok = !input_register_handler(&rfx_input_handler);\n\tif (!input_ok)\n\t\tpr_warn("vorpal: input handler register failed (touch boost off)\\n");}' "$VORPAL_C"
           fi
-
           if ! grep -q "if (input_ok)" "$VORPAL_C"; then
             perl -0pi -e 's{\tret = cpufreq_register_governor\(&vorpal_gov\);\n\tif \(ret\) \{\n\t\tinput_unregister_handler\(&rfx_input_handler\);\n\t\tcancel_delayed_work_sync\(&rfx_thermal_work\);\n\t\}}{\tret = cpufreq_register_governor(&vorpal_gov);\n\tif (ret) \{\n\t\tif (input_ok)\n\t\t\tinput_unregister_handler(&rfx_input_handler);\n\t\tcancel_delayed_work_sync(&rfx_thermal_work);\n\t\}}' "$VORPAL_C"
           fi
-
           for MARK in "bool input_ok;" "input_ok = !input_register_handler" "if (input_ok)"; do
             if ! grep -qF "$MARK" "$VORPAL_C"; then
               echo "ERROR: missing marker in vorpal_gov_init(): $MARK" >&2
@@ -270,27 +286,21 @@ jobs:
         run: |
           set -euo pipefail
           FAIR_C="kernel/sched/fair.c"
-
           if ! grep -q "extern int sched_gaming_active;" "$FAIR_C"; then
             perl -0pi -e 's{(static unsigned int normalized_sysctl_sched_latency\s*=\s*6000000ULL;)}{$1\n\nextern int sched_gaming_active;\n\n#define GAMING_VRUNTIME_STRETCH\t\t4\n}' "$FAIR_C"
           fi
-
           if ! grep -q "GAMING_VRUNTIME_STRETCH - 1" "$FAIR_C"; then
             perl -0pi -e 's{(\tcurr->vruntime \+= calc_delta_fair\(delta_exec, curr\);\n)(\tupdate_min_vruntime\(cfs_rq\);\n)}{$1\n\tif (unlikely(sched_gaming_active \&\& !entity_is_task(curr))) {\n\t\tcurr->vruntime += calc_delta_fair(delta_exec * (GAMING_VRUNTIME_STRETCH - 1), curr);\n\t} else if (unlikely(sched_gaming_active \&\& entity_is_task(curr) \&\&\n\t\t\t     curr->avg.load_avg < 100)) {\n\t\tcurr->vruntime += calc_delta_fair(delta_exec, curr);\n\t}\n$2}' "$FAIR_C"
           fi
-
           if ! grep -q "ideal_runtime / 2" "$FAIR_C"; then
             perl -0pi -e 's{(\tdelta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;\n)(\ttrace_android_rvh_check_preempt_tick)}{$1\n\tif (unlikely(sched_gaming_active) \&\& entity_is_task(curr)) {\n\t\tstruct task_struct *p = task_of(curr);\n\n\t\tif (p->static_prio > DEFAULT_PRIO \&\&\n\t\t    delta_exec > ideal_runtime / 2)\n\t\t\tresched_curr(rq_of(cfs_rq));\n\t}\n\n$2}' "$FAIR_C"
           fi
-
           if ! grep -q "NSEC_PER_MSEC" "$FAIR_C"; then
             perl -0pi -e 's{(\tfor_each_sched_entity\(se\) \{\n\t\tcfs_rq = cfs_rq_of\(se\);\n\n)(\t\tupdate_load_avg\(cfs_rq, se, UPDATE_TG\);\n\t\tse_update_runnable\(se\);\n\t\tupdate_cfs_group\(se\);)}{$1\t\tif (unlikely(sched_gaming_active \&\& entity_is_task(se) \&\&\n\t\t\t     task_of(se)->static_prio <= DEFAULT_PRIO))\n\t\t\tse->vruntime -= min_t(u64, se->vruntime, NSEC_PER_MSEC);\n\n$2}' "$FAIR_C"
           fi
-
           if ! grep -q "Gaming task isolation" "$FAIR_C"; then
             perl -0pi -e 's{(\tdelta = rq_clock_task\(env->src_rq\) - p->se\.exec_start;\n\n)(\treturn delta < \(s64\)sysctl_sched_migration_cost;\n\}\n)}{$1\t/* Gaming task isolation */\n\tif (sched_gaming_active) {\n\t\tif (capacity_orig_of(env->dst_cpu) < capacity_orig_of(env->src_cpu) \&\&\n\t\t    task_util(p) > (capacity_orig_of(env->src_cpu) >> 3))\n\t\t\treturn 1;\n\t\treturn delta < (s64)sysctl_sched_migration_cost * 2;\n\t}\n\n$2}' "$FAIR_C"
           fi
-
           for MARK in "extern int sched_gaming_active;" "GAMING_VRUNTIME_STRETCH - 1" "ideal_runtime / 2" "NSEC_PER_MSEC" "Gaming task isolation"; do
             if ! grep -qF "$MARK" "$FAIR_C"; then
               echo "ERROR: failed to inject fair.c gaming patch, missing marker: $MARK" >&2
@@ -302,15 +312,6 @@ jobs:
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
           curl -sL "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch" | git apply -v --ignore-whitespace || echo "::warning::Droidspaces patch skipped/failed"
-
-      - name: "😋 Add BBG Support"
-        if: matrix.kernel.enable_ksu == true
-        working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
-        run: |
-          echo "Adding BBG..."
-          wget -O- https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
-          echo "CONFIG_BBG=y" >> arch/arm64/configs/${{ env.DEFCONFIG_NAME }}
-          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
 
       - name: "🔧 Add NoMount Support"
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
@@ -366,15 +367,6 @@ jobs:
 
           cat > AnyKernel3/banner << 'EOF'
           ╔═════════════════════════════════════════════════════╗
-          ║'##::::'##::'######::'########::'#######:::'######::'##:::'##:║
-          ║. ##::'##::'##... ##:... ##..::'##.... ##:'##... ##: ##::'##::║
-          ║:. ##'##::: ##:::..::::: ##:::: ##:::: ##: ##:::..:: ##:'##:::║
-          ║::. ###::::. ######::::: ##:::: ##:::: ##: ##::::::: #####::::║
-          ║:: ## ##::::..... ##:::: ##:::: ##:::: ##: ##::::::: ##. ##:::║
-          ║: ##:. ##::'##::: ##:::: ##:::: ##:::: ##: ##::: ##: ##:. ##::║
-          ║##:::. ##:. ######::::: ##::::. #######::. ######:: ##::. ##::║
-          ║..:::::..:::......::::::..::::::.......::::......:::..::::..::║
-          ║                                                     ║
           ║                     XStock Kernel                   ║
           ║                   by @yougotme101                   ║
           ║              Powered by Github Actions              ║
@@ -384,7 +376,6 @@ jobs:
           ║     • Extra TCP Congestion                          ║
           ║     • AOSP clang-r614150                            ║
           ║     • Droidspaces Support                           ║
-          ║     • Baseband-guard v1 Support                     ║
           ║     • Vanilla (No-KSU)                              ║
           ║     • Metamodule & NoMount Support                  ║
           ╚═════════════════════════════════════════════════════╝
@@ -408,7 +399,6 @@ jobs:
         run: |
           RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/XStock-NoKSU"
           BANNER_URL="https://raw.githubusercontent.com/yougotme101/kernel_msm-5.15/builder/assets/xeniel.png"
-
           if [[ "${{ job.status }}" == "success" ]]; then
             MESSAGE="✅ *XStock Kernel Released*
 
@@ -417,10 +407,8 @@ jobs:
           • Android: \`13-17\`
           • Base: \`GKI & CLO\`
           • KSU: \`No\`
-          • SUSFS: \`Disabled\`
           • LTO: \`Full\`
           • Optimization: \`-O2\`
-          • BBG: \`Enabled\`
           • Droidspaces: \`Enabled\`
           • NoMount: \`Enabled\`
 
@@ -433,7 +421,6 @@ jobs:
           📦 *Package:* \`${{ env.ZIP_NAME }}\`
 
           ⬇️ [Download Here]($RELEASE_URL)"
-
             curl -s -X POST \
               -d chat_id=${{ secrets.TELEGRAM_USER_ID }} \
               -d photo="${BANNER_URL}" \
@@ -441,23 +428,12 @@ jobs:
               -d parse_mode="Markdown" \
               -d disable_web_page_preview="false" \
               "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendPhoto"
-
           else
             FAILURE_MSG="❌ *XStock Kernel Build Failed*
-
-          📦 *Build Information:*
-          • Kernel: \`Linux 5.15\`
-          • Android: \`13-17\`
-          • Base: \`GKI & CLO\`
-          • KSU: \`No\`
-          • SUSFS: \`Disabled\`
-          • LTO: \`Full\`
-          • Optimization: \`-O2\`
 
           🕐 *Failed at:* $(date '+%Y-%m-%d %H:%M:%S UTC')
 
           🔍 Check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
-
             curl -s -X POST \
               -d chat_id=${{ secrets.TELEGRAM_USER_ID }} \
               -d photo="${BANNER_URL}" \
