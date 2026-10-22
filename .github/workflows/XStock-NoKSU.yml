@@ -174,11 +174,6 @@ jobs:
           # memtool support
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
 
-          # ===== IMPORTANTE: NO añadir mt7921u aquí =====
-          # Si el kernel no genera los .ko, la lista de módulos GKI se desincroniza y falla:
-          #   ERROR: modules list out of date
-          # Por eso se omite mt7921u en esta versión.
-
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
@@ -359,7 +354,7 @@ jobs:
     needs: [build-kernels]
     steps:
       - name: "📥 Download kernel artifacts"
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./artifacts/
 
@@ -403,7 +398,7 @@ jobs:
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
       - name: "⬆️ Upload to GitHub Release"
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.ZIP_NAME }}
           tag_name: "XStock-NoKSU"
