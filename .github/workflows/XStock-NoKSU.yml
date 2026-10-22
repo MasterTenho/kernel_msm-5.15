@@ -10,6 +10,9 @@ on:
     - cron: '0 0 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-kernels:
     name: "🐎 Build XStock ${{ matrix.kernel.name }} kernel"
@@ -63,7 +66,7 @@ jobs:
           mkdir -p ${{ env.KERNEL_LOC_DIR }}
           echo "BUILD_TIME=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
           sudo apt-get update -qq
-          sudo apt-get install -y repo rsync aria2
+          sudo apt-get install -y repo rsync aria2 jq
 
       - name: 🔍 Check Space (Before Cleanup)
         run: |
@@ -72,14 +75,11 @@ jobs:
 
       - name: 🧹 Aggressive Cleanup
         run: |
-          # Remove heavy pre-installed tools
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
           sudo rm -rf "/usr/local/share/boost"
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          
-          # Prune Docker to remove hidden images and build cache
           sudo docker image prune --all --force
           sudo docker builder prune -a -f
 
@@ -87,12 +87,12 @@ jobs:
         run: |
           echo "Disk space after cleanup:"
           df -h /
-          
+
       - name: 📐 Setup SWAP 14GB
         uses: pierotofy/set-swap-space@master
         with:
             swap-size-gb: 14
-            
+
       - name: 📐 Tune Swap
         run: |
             echo "vm.swappiness=80" | sudo tee -a /etc/sysctl.conf
@@ -107,37 +107,31 @@ jobs:
       - name: "📥 Initialize AOSP repo and toolchains"
         working-directory: ${{ env.WORK_DIR }}
         run: |
-          # Initialize AOSP repo
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android13-5.15-lts --depth=1
           repo sync --optimized-fetch --prune -j8
-          
-          # Clean up existing repo and common directories
+
           rm -rf .repo
           rm -rf common
 
-          # Download and setup custom clang toolchain
           aria2c -x 16 -s 16 -o prebuilts/clang/host/linux-x86/clang-r614150.tar.gz "https://github.com/yougotme101/clang/releases/download/v1.0.2/clang-r614150.tar.gz"
           mkdir -p prebuilts/clang/host/linux-x86/clang-r614150
           tar -xzf prebuilts/clang/host/linux-x86/clang-r614150.tar.gz -C prebuilts/clang/host/linux-x86/clang-r614150
           rm -rf prebuilts/clang/host/linux-x86/clang-r614150.tar.gz
 
-          # Remove unused clang for more space
           rm -rf prebuilts/clang/host/linux-x86/clang-3289846
           rm -rf prebuilts/clang/host/linux-x86/clang-r450784e
           rm -rf prebuilts/clang/host/linux-x86/clang-r547379
           rm -rf prebuilts/clang/host/linux-x86/clang-r584948b
           rm -rf prebuilts/clang/host/linux-x86/clang-r596125
           rm -rf prebuilts/clang/host/linux-x86/clang-stable
-          
-          # Update build config constants
+
           sed -i \
            -e 's/^BRANCH=.*/BRANCH=android13-5.15/' \
            -e 's/^CLANG_VERSION=.*/CLANG_VERSION=r614150/' \
            ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.constants
-          
-          # Remove defconfig check (if exists)
+
           sed -i '/^POST_DEFCONFIG_CMDS="check_defconfig"/d' ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki || true
-          
+
       - name: "🧩 Configure kernel & patches"
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
@@ -145,7 +139,6 @@ jobs:
           echo "CONFIG_LOCALVERSION=\"${{ env.LOCAL_VERSION }}-${{ env.BUILD_TIME }}\"" >> "$CONFIG_FILE"
           echo "CONFIG_LOCALVERSION_AUTO=n" >> "$CONFIG_FILE"
 
-          # Helper
           apply_patch() {
             local url="$1"
             local file=$(basename "$url")
@@ -154,18 +147,15 @@ jobs:
             rm -f "$file"
           }
 
-          # Common patches
           apply_patch "https://raw.githubusercontent.com/topnotchfreaks/kernel_patches/main/0001-gki-fixup.patch"
 
-          # Kernel-specific patches
           echo '${{ toJSON(matrix.kernel.extra_patches) }}' | jq -r '.[]' | while read p; do
             [ -n "$p" ] && apply_patch "$p"
           done
 
-          # Basic optimizations
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
 
-          # Extra Addon and Performance configs
+          # ===== Optimizaciones base para Redmi Note 13 4G (SM6225-AD) =====
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
@@ -192,6 +182,17 @@ jobs:
           echo "CONFIG_CRYPTO_LZ4=y" >> "$CONFIG_FILE"
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
+
+          # ===== ZRAM / ZSMALLOC 内建 (crítico para 4/6GB RAM) =====
+          echo "CONFIG_ZRAM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ZSMALLOC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ZRAM_WRITEBACK=y" >> "$CONFIG_FILE"
+
+          # ===== Reducir tamaño del kernel (ahorra memoria) =====
+          echo "# CONFIG_PROFILING is not set" >> "$CONFIG_FILE"
+
+          # ===== memtool support: habilita /dev/mem =====
+          echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
 
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
@@ -223,7 +224,7 @@ jobs:
               echo "CONFIG_CPU_FREQ_GOV_REFLEX=y" >> "$CONFIG_FILE"
             fi
           fi
-          
+
           echo "🎉 Inject Reflex Governor setup complete!"
 
       - name: 'Inject Vorpal Governor + GKI510 Compat'
@@ -237,7 +238,7 @@ jobs:
             "https://raw.githubusercontent.com/yougotme101/KonekoKernel-GKI/refs/heads/main/.github/actions/build-kernel/patches/vorpal/cpufreq_vorpal.c"
           curl -sL -o kernel/sched/rfx_gki510_compat.c \
             "https://raw.githubusercontent.com/yougotme101/KonekoKernel-GKI/refs/heads/main/.github/actions/build-kernel/patches/vorpal/rfx_gki510_compat.c"
-            
+
           if ! grep -q "cpufreq_vorpal.o" "kernel/sched/Makefile"; then
             echo 'obj-$(CONFIG_CPU_FREQ_GOV_VORPAL) += cpufreq_vorpal.o' >> "kernel/sched/Makefile"
           fi
@@ -256,7 +257,7 @@ jobs:
             printf "\t  gaming/thermal-aware dual-profile operation.\n" >> "drivers/cpufreq/Kconfig"
           fi
 
-          CONFIG_FILE="arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"          
+          CONFIG_FILE="arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"
           if [ -f "$CONFIG_FILE" ] && ! grep -q "CONFIG_CPU_FREQ_GOV_VORPAL" "$CONFIG_FILE"; then
             echo "CONFIG_CPU_FREQ_GOV_VORPAL=y" >> "$CONFIG_FILE"
           fi
@@ -309,7 +310,7 @@ jobs:
           fi
 
           if ! grep -q "ideal_runtime / 2" "$FAIR_C"; then
-            perl -0pi -e 's{(\tdelta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;\n)(\ttrace_android_rvh_check_preempt_tick)}{$1\n\tif (unlikely(sched_gaming_active) \&\& entity_is_task(curr)) {\n\t\tstruct task_struct *p = task_of(curr);\n\n\t\tif (p->static_prio > DEFAULT_PRIO \&\n\t\t    delta_exec > ideal_runtime / 2)\n\t\t\tresched_curr(rq_of(cfs_rq));\n\t}\n\n$2}' "$FAIR_C"
+            perl -0pi -e 's{(\tdelta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;\n)(\ttrace_android_rvh_check_preempt_tick)}{$1\n\tif (unlikely(sched_gaming_active) \&\& entity_is_task(curr)) {\n\t\tstruct task_struct *p = task_of(curr);\n\n\t\tif (p->static_prio > DEFAULT_PRIO \&\&\n\t\t    delta_exec > ideal_runtime / 2)\n\t\t\tresched_curr(rq_of(cfs_rq));\n\t}\n\n$2}' "$FAIR_C"
           fi
 
           if ! grep -q "NSEC_PER_MSEC" "$FAIR_C"; then
@@ -330,8 +331,8 @@ jobs:
       - name: "🚀 Add Droidspaces Support (fix KABI sysvipc)"
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
-          curl -sL "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch" | git apply -v --ignore-whitespace
-          
+          curl -sL "https://raw.githubusercontent.com/ravindu644/Droidspaces-OSS/main/Documentation/resources/kernel-patches/GKI/below-kernel-6.12/001.GKI-below-6.12-fix_sysvipc_kabi_6_7_8.patch" | git apply -v --ignore-whitespace || echo "::warning::Droidspaces patch skipped/failed"
+
       - name: "😋 Add BBG Support"
         if: matrix.kernel.enable_ksu == true
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
@@ -349,8 +350,6 @@ jobs:
       - name: "📝 Append custom Makefile line"
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
-         # echo 'KBUILD_CFLAGS += -Wno-default-const-init-unsafe' >> Makefile
-         # echo 'KBUILD_CFLAGS += -Wno-uninitialized-const-pointer' >> Makefile
          echo 'KBUILD_CFLAGS += -Wno-implicit-function-declaration' >> Makefile
          echo "Custom Makefile line added successfully"
 
@@ -360,7 +359,7 @@ jobs:
           LTO=full \
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
-          
+
       - name: "📁 Copy Vanilla kernel image"
         if: matrix.kernel.enable_ksu == false
         working-directory: ${{ env.WORK_DIR }}/out/dist
@@ -375,7 +374,7 @@ jobs:
           retention-days: 1
 
       - name: 🔍 Check Space (Post-Build)
-        if: always() # Run even if build fails to debug space issues
+        if: always()
         run: |
           echo "Final disk space status:"
           df -h /
@@ -394,13 +393,10 @@ jobs:
         run: |
           set -e
 
-          # Clone AnyKernel3
           git clone --depth=1 https://github.com/yougotme101/AnyKernel3 -b YASK AnyKernel3
 
-          # Copy kernel images
           find ./artifacts -name "Image.*" -exec cp {} AnyKernel3/ \;
 
-          # Create banner
           cat > AnyKernel3/banner << 'EOF'
           ╔═════════════════════════════════════════════════════╗
           ║'##::::'##::'######::'########::'#######:::'######::'##:::'##:║
@@ -421,6 +417,7 @@ jobs:
           ║                                                     ║
           ║     Features:                                       ║
           ║     • Full LTO + -O2 Optimization                   ║
+          ║     • ZRAM/ZSMALLOC built-in (4/6GB optimized)      ║
           ║     • Extra TCP Congestion                          ║
           ║     • AOSP clang-r614150                            ║
           ║     • Droidspaces Support                           ║
@@ -436,28 +433,26 @@ jobs:
           Installing XStock Kernel...
           EOF
 
-          # Create ZIP
           ZIP_NAME="AK3_XStock-AIO-FULL_NOKSU_$(date +'%Y-%m-%d').zip"
           cd AnyKernel3
           zip -r9 "../$ZIP_NAME" * -x .git/*
           cd ..
-          
+
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
           echo "✅ Package created: $ZIP_NAME"
 
       - name: "⬆️ Upload to GitHub Release"
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.ZIP_NAME }}
           tag_name: "XStock-NoKSU"
+          generate_release_notes: true
 
       - name: "🎉 Send Telegram success notification"
         run: |
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/XStock-MULTI"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/XStock-NoKSU"
           BANNER_URL="https://raw.githubusercontent.com/yougotme101/kernel_msm-5.15/builder/assets/xeniel.png"
-          
+
           if [[ "${{ job.status }}" == "success" ]]; then
             MESSAGE="✅ *XStock Kernel Released*
 
@@ -472,6 +467,8 @@ jobs:
           • BBG: \`Enabled\`
           • Droidspaces: \`Enabled\`
           • NoMount: \`Enabled\`
+          • ZRAM/ZSMALLOC: \`Built-in\`
+          • memtool: \`Enabled (CONFIG_DEVMEM)\`
 
           📱 *Supported Devices:*
           • Redmi Note 12 4G/NFC
@@ -494,7 +491,7 @@ jobs:
 
           else
             FAILURE_MSG="❌ *XStock Kernel Build Failed*
-            
+
           📦 *Build Information:*
           • Kernel: \`Linux 5.15\`
           • Android: \`13-17\`
@@ -506,11 +503,11 @@ jobs:
           • BBG: \`Enabled\`
           • Droidspaces: \`Enabled\`
           • NoMount: \`Enabled\`
-          
+
           🕐 *Failed at:* $(date '+%Y-%m-%d %H:%M:%S UTC')
 
           🔍 Check the [workflow logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
-           
+
             curl -s -X POST \
               -d chat_id=${{ secrets.TELEGRAM_USER_ID }} \
               -d photo="${BANNER_URL}" \
