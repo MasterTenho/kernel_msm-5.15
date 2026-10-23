@@ -66,7 +66,6 @@ jobs:
           mkdir -p ${{ env.KERNEL_LOC_DIR }}
           echo "BUILD_TIME=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
           sudo apt-get update -qq
-          # gcc-aarch64-linux-gnu y autotools son necesarios para compilar memtool estático
           sudo apt-get install -y repo rsync aria2 jq gcc-aarch64-linux-gnu autoconf automake
 
       - name: 🔍 Check Space (Before Cleanup)
@@ -178,6 +177,13 @@ jobs:
           echo "CONFIG_CRYPTO_LZ4=y" >> "$CONFIG_FILE"
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
+
+          # NFC support
+          echo "CONFIG_NFC=y" >> "$CONFIG_FILE"
+
+          # Bluetooth support (si ya existe, no se duplica)
+          grep -q "^CONFIG_BT=y" "$CONFIG_FILE" || echo "CONFIG_BT=y" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_BT_HIDP=y" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
 
           # memtool support: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
@@ -317,6 +323,44 @@ jobs:
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
 
+      - name: "📡 Build RTL8188EUS driver (TP-Link TL-WN722N V4)"
+        working-directory: ${{ env.WORK_DIR }}
+        run: |
+          set -e
+          echo "🔧 Preparando kernel headers para compilar módulos externos..."
+          cd ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
+          make ARCH=arm64 LLVM=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy STRIP=llvm-strip modules_prepare || true
+          make ARCH=arm64 LLVM=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy STRIP=llvm-strip modules_install INSTALL_MOD_PATH=../ || true
+
+          cd ${{ env.WORK_DIR }}
+          echo "📦 Clonando driver rtl8188eus..."
+          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git rtl8188eus-src || {
+            echo "::warning::No se pudo clonar rtl8188eus"
+            exit 0
+          }
+
+          cd rtl8188eus-src
+
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export KBUILD_KVER=$(cat ${{ env.WORK_DIR }}/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/include/config/kernel.release 2>/dev/null || echo "5.15.0")
+
+          echo "🔨 Compilando driver con KSRC apuntando al kernel compilado..."
+          sed -i "s|^KSRC :=.*|KSRC := ${{ env.WORK_DIR }}/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}|" Makefile
+
+          make -j$(nproc) || {
+            echo "::warning::Falló la compilación del driver RTL8188EUS (esperado en GKI sin cfg80211/mac80211)"
+            exit 0
+          }
+
+          find . -name "8188eu.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
+          if ls "${{ env.WORK_DIR }}"/*.ko 1>/dev/null 2>&1; then
+            echo "✅ Driver RTL8188EUS compilado"
+          else
+            echo "::warning::No se generó 8188eu.ko"
+          fi
+
       - name: "📡 Build RTL8812AU driver (monitor + injection)"
         working-directory: ${{ env.WORK_DIR }}
         run: |
@@ -331,8 +375,8 @@ jobs:
             echo "::warning::Falló la compilación del driver RTL8812AU"
             exit 0
           }
-          find . -name "*.ko" -exec cp {} "${{ env.WORK_DIR }}/" \;
-          echo "✅ Driver RTL8812AU compilado"
+          find . -name "*.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
+          echo "✅ Driver RTL8812AU compilado (si es que compiló)"
 
       - name: "🔧 Build memtool (static)"
         working-directory: ${{ env.WORK_DIR }}
@@ -369,18 +413,26 @@ jobs:
           cp Image "${{ env.OUTPUT_NAME }}"
 
       - name: "📤 Upload kernel artifact"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.kernel.name }}-kernel
           path: ${{ env.WORK_DIR }}/out/dist/${{ env.OUTPUT_NAME }}
           retention-days: 1
 
       - name: "📤 Upload memtool artifact"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: memtool-${{ matrix.kernel.name }}
           path: ${{ env.WORK_DIR }}/memtool
           retention-days: 1
+
+      - name: "📤 Upload driver artifacts"
+        uses: actions/upload-artifact@v6
+        with:
+          name: drivers-${{ matrix.kernel.name }}
+          path: ${{ env.WORK_DIR }}/*.ko
+          retention-days: 1
+          if-no-files-found: ignore
 
       - name: 🔍 Check Space (Post-Build)
         if: always()
@@ -404,7 +456,6 @@ jobs:
           git clone --depth=1 https://github.com/yougotme101/AnyKernel3 -b YASK AnyKernel3
           find ./artifacts -name "Image.*" -exec cp {} AnyKernel3/ \;
 
-          # Copiar memtool al ZIP si existe
           MEMTOOL_BIN=$(find ./artifacts -name "memtool" -type f | head -n 1)
           if [ -n "$MEMTOOL_BIN" ] && [ -f "$MEMTOOL_BIN" ]; then
             cp "$MEMTOOL_BIN" AnyKernel3/memtool
@@ -414,13 +465,14 @@ jobs:
             echo "::warning::memtool no encontrado en los artefactos"
           fi
 
-          # Copiar driver WiFi si existe
-          DRIVER_KO=$(find ./artifacts -name "*.ko" -type f | head -n 1)
-          if [ -n "$DRIVER_KO" ] && [ -f "$DRIVER_KO" ]; then
-            cp "$DRIVER_KO" AnyKernel3/
-            echo "✅ Driver incluido en el ZIP: $(basename $DRIVER_KO)"
+          DRIVERS=$(find ./artifacts -name "*.ko" -type f 2>/dev/null || true)
+          if [ -n "$DRIVERS" ]; then
+            echo "$DRIVERS" | while read ko; do
+              cp "$ko" AnyKernel3/
+              echo "✅ Driver incluido: $(basename $ko)"
+            done
           else
-            echo "::warning::No se encontró driver .ko, el ZIP no incluirá inyección WiFi"
+            echo "::warning::No se encontraron drivers .ko"
           fi
 
           cat > AnyKernel3/banner << 'EOF'
@@ -437,6 +489,8 @@ jobs:
           ║     • Vanilla (No-KSU)                              ║
           ║     • Metamodule & NoMount Support                  ║
           ║     • memtool (static, CONFIG_DEVMEM)               ║
+          ║     • NFC + Bluetooth support                       ║
+          ║     • RTL8188EUS (TL-WN722N V4) attempt             ║
           ╚═════════════════════════════════════════════════════╝
           Installing XStock Kernel...
           EOF
@@ -470,7 +524,10 @@ jobs:
           • Optimization: \`-O2\`
           • Droidspaces: \`Enabled\`
           • NoMount: \`Enabled\`
+          • NFC: \`Enabled\`
+          • Bluetooth: \`Enabled\`
           • memtool: \`Included (static)\`
+          • RTL8188EUS: \`Compilado (puede no cargar en GKI)\`
 
           📱 *Supported Devices:*
           • Redmi Note 12 4G/NFC
