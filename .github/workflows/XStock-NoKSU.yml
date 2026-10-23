@@ -151,7 +151,7 @@ jobs:
 
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
 
-                    # Optimizaciones base para Redmi Note 13 4G
+          # Optimizaciones base para Redmi Note 13 4G
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
@@ -169,7 +169,7 @@ jobs:
           echo "CONFIG_SUSPEND=y" >> "$CONFIG_FILE"
           echo "CONFIG_SUSPEND_FREEZER=y" >> "$CONFIG_FILE"
 
-          # Compresión del kernel: solo LZ4 activo
+          # Compresión del kernel: solo LZ4
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_GZIP is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_LZO is not set" >> "$CONFIG_FILE"
@@ -192,7 +192,7 @@ jobs:
           echo "# CONFIG_MODULE_SIG_FORCE is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_MODULE_SIG_ALL is not set" >> "$CONFIG_FILE"
 
-          # memtool support: habilita /dev/mem SIN restricciones
+          # memtool: habilitar /dev/mem SIN restricciones
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
           echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
@@ -330,22 +330,20 @@ jobs:
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
 
-      - name: "📡 Build RTL8812AU driver (monitor + injection)"
+      - name: "📡 Build RTL8188EUS driver (monitor + injection)"
         working-directory: ${{ env.WORK_DIR }}
         run: |
           set -e
-          git clone --depth=1 -b v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git rtl8812au-src
-          cd rtl8812au-src
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
-          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
+          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git rtl8188eus-src
+          cd rtl8188eus-src
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
                KSRC=${{ env.WORK_DIR }}/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }} \
                -j$(nproc) || {
-            echo "::warning::Falló la compilación del driver RTL8812AU"
+            echo "::warning::Falló la compilación del driver RTL8188EUS"
             exit 0
           }
-          find . -name "*.ko" -exec cp {} "${{ env.WORK_DIR }}/" \;
-          echo "✅ Driver RTL8812AU compilado"
+          find . -name "8188eu.ko" -exec cp {} "${{ env.WORK_DIR }}/" \;
+          echo "✅ Driver RTL8188EUS compilado"
 
       - name: "🔧 Build memtool (static)"
         working-directory: ${{ env.WORK_DIR }}
@@ -427,10 +425,12 @@ jobs:
             echo "::warning::memtool no encontrado en los artefactos"
           fi
 
-          # Copiar driver WiFi si existe
+          # Copiar driver WiFi si existe (a la ruta correcta de módulos)
           DRIVER_KO=$(find ./artifacts -name "*.ko" -type f | head -n 1)
           if [ -n "$DRIVER_KO" ] && [ -f "$DRIVER_KO" ]; then
-            cp "$DRIVER_KO" AnyKernel3/
+            mkdir -p AnyKernel3/modules/vendor/lib/modules
+            cp "$DRIVER_KO" AnyKernel3/modules/vendor/lib/modules/
+            sed -i 's/^do.modules=.*/do.modules=1/' AnyKernel3/anykernel.sh
             echo "✅ Driver incluido en el ZIP: $(basename $DRIVER_KO)"
           else
             echo "::warning::No se encontró driver .ko, el ZIP no incluirá inyección WiFi"
