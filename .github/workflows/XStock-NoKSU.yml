@@ -79,13 +79,6 @@ jobs:
           git clone --recursive --branch ${{ env.KERNEL_BRANCH }} \
             ${{ env.KERNEL_REPO }} ${{ env.KERNEL_NAME }} --depth=1
 
-      - name: "📡 Apply mac80211 injection patch"
-        working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
-        run: |
-          curl -L -o injection.patch \
-            "https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/add-wifi-injection.patch"
-          git apply injection.patch || echo "::warning::El parche de inyección no se aplicó, revisa el log"
-
       - name: "📥 Initialize AOSP repo and toolchains"
         working-directory: ${{ env.WORK_DIR }}
         run: |
@@ -136,7 +129,7 @@ jobs:
 
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
 
-          # Optimizaciones base para Redmi Note 13 4G
+          # Optimizaciones base
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
@@ -164,14 +157,14 @@ jobs:
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
 
-          # NFC support
+          # NFC
           echo "CONFIG_NFC=y" >> "$CONFIG_FILE"
 
-          # Bluetooth support (si ya existe, no se duplica)
+          # Bluetooth
           grep -q "^CONFIG_BT=y" "$CONFIG_FILE" || echo "CONFIG_BT=y" >> "$CONFIG_FILE"
           grep -q "^CONFIG_BT_HIDP=y" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
 
-          # memtool support: habilita /dev/mem
+          # memtool: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
           echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
@@ -195,8 +188,7 @@ jobs:
             printf "\tdepends on CPU_FREQ && SMP\n" >> "drivers/cpufreq/Kconfig"
             printf "\tselect CPU_FREQ_GOV_ATTR_SET\n" >> "drivers/cpufreq/Kconfig"
             printf "\thelp\n" >> "drivers/cpufreq/Kconfig"
-            printf "\t  'reflex' is an advanced CPU frequency governor based on schedutil,\n" >> "drivers/cpufreq/Kconfig"
-            printf "\t  featuring idle-time accounting and PELT-complementary exponential decay.\n" >> "drivers/cpufreq/Kconfig"
+            printf "\t  'reflex' is an advanced CPU frequency governor based on schedutil.\n" >> "drivers/cpufreq/Kconfig"
           fi
 
           CONFIG_FILE="arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"
@@ -228,8 +220,7 @@ jobs:
             printf "\tdepends on CPU_FREQ && SMP\n" >> "drivers/cpufreq/Kconfig"
             printf "\tselect CPU_FREQ_GOV_ATTR_SET\n" >> "drivers/cpufreq/Kconfig"
             printf "\thelp\n" >> "drivers/cpufreq/Kconfig"
-            printf "\t  'vorpal' is a schedutil-based governor tuned for\n" >> "drivers/cpufreq/Kconfig"
-            printf "\t  gaming/thermal-aware dual-profile operation.\n" >> "drivers/cpufreq/Kconfig"
+            printf "\t  'vorpal' is a schedutil-based governor tuned for gaming.\n" >> "drivers/cpufreq/Kconfig"
           fi
 
           CONFIG_FILE="arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"
@@ -347,23 +338,6 @@ jobs:
             echo "::warning::No se generó 8188eu.ko"
           fi
 
-      - name: "📡 Build RTL8812AU driver (monitor + injection)"
-        working-directory: ${{ env.WORK_DIR }}
-        run: |
-          set -e
-          git clone --depth=1 -b v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git rtl8812au-src
-          cd rtl8812au-src
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
-          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
-          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-               KSRC=${{ env.WORK_DIR }}/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }} \
-               -j$(nproc) || {
-            echo "::warning::Falló la compilación del driver RTL8812AU"
-            exit 0
-          }
-          find . -name "*.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
-          echo "✅ Driver RTL8812AU compilado (si es que compiló)"
-
       - name: "🔧 Build memtool (static)"
         working-directory: ${{ env.WORK_DIR }}
         run: |
@@ -399,21 +373,21 @@ jobs:
           cp Image "${{ env.OUTPUT_NAME }}"
 
       - name: "📤 Upload kernel artifact"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.kernel.name }}-kernel
           path: ${{ env.WORK_DIR }}/out/dist/${{ env.OUTPUT_NAME }}
           retention-days: 1
 
       - name: "📤 Upload memtool artifact"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: memtool-${{ matrix.kernel.name }}
           path: ${{ env.WORK_DIR }}/memtool
           retention-days: 1
 
       - name: "📤 Upload driver artifacts"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: drivers-${{ matrix.kernel.name }}
           path: ${{ env.WORK_DIR }}/*.ko
