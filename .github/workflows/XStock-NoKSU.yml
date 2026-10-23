@@ -181,8 +181,8 @@ jobs:
 
           # memtool support: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
-          echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
-          echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
+          echo "# CONFIG_STRICT_DEVMEM=y" >> "$CONFIG_FILE"
+          echo "# CONFIG_IO_STRICT_DEVMEM=y" >> "$CONFIG_FILE"
 
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
