@@ -143,7 +143,7 @@ jobs:
 
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
 
-          # ===== Optimizaciones base para Redmi Note 13 4G =====
+          # Optimizaciones base para Redmi Note 13 4G
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
@@ -171,31 +171,8 @@ jobs:
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
 
-          # memtool support
+          # memtool support: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
-
-          # ============================================================
-          # ⚠️ TL-WN722N / ath9k_htc: NO añadir aquí
-          # ============================================================
-          # El GKI estándar de Android 13-5.15 tiene mac80211/cfg80211
-          # deshabilitados (o eliminados) para evitar conflictos con la
-          # pila WiFi del vendor[citation:2][citation:6].
-          # Si añades ath9k_htc=m sin restaurar primero mac80211/cfg80211,
-          # la compilación fallará en la verificación de módulos.
-          #
-          # Si realmente quieres intentarlo, el orden correcto es:
-          # 1. Confirmar que tu TL-WN722N es v1 (AR9271)
-          # 2. Descomentar el bloque de abajo
-          # 3. Compilar, ver qué .ko faltan en modules.bzl, añadirlos
-          # 4. Volver a compilar
-          # 5. Y aun así, muy probablemente Android no lo reconozca
-          #
-          # echo "CONFIG_CFG80211=m" >> "$CONFIG_FILE"
-          # echo "CONFIG_MAC80211=m" >> "$CONFIG_FILE"
-          # echo "CONFIG_ATH_COMMON=m" >> "$CONFIG_FILE"
-          # echo "CONFIG_ATH9K_HW=m" >> "$CONFIG_FILE"
-          # echo "CONFIG_ATH9K_COMMON=m" >> "$CONFIG_FILE"
-          # echo "CONFIG_ATH9K_HTC=m" >> "$CONFIG_FILE"
 
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
@@ -330,6 +307,29 @@ jobs:
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
 
+      - name: "🔧 Build memtool (static)"
+        working-directory: ${{ env.WORK_DIR }}
+        run: |
+          set -e
+          echo "📦 Cloning memtool..."
+          git clone --depth=1 https://github.com/ensc/memtool.git memtool-src || \
+            { echo "❌ Failed to clone memtool"; exit 1; }
+
+          cd memtool-src
+          echo "🔨 Building static memtool with aarch64 toolchain..."
+          # Compilación estática con el toolchain de GNU para aarch64
+          aarch64-linux-gnu-gcc -static -O2 -o memtool memtool.c 2>/dev/null || \
+          aarch64-linux-gnu-gcc -static -O2 -o memtool *.c
+
+          if [ ! -f memtool ]; then
+            echo "❌ memtool binary not found"
+            exit 1
+          fi
+
+          file memtool
+          cp memtool "${{ env.WORK_DIR }}/memtool"
+          echo "✅ memtool built and copied to workspace"
+
       - name: "📁 Copy Vanilla kernel image"
         if: matrix.kernel.enable_ksu == false
         working-directory: ${{ env.WORK_DIR }}/out/dist
@@ -341,6 +341,13 @@ jobs:
         with:
           name: ${{ matrix.kernel.name }}-kernel
           path: ${{ env.WORK_DIR }}/out/dist/${{ env.OUTPUT_NAME }}
+          retention-days: 1
+
+      - name: "📤 Upload memtool artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: memtool-${{ matrix.kernel.name }}
+          path: ${{ env.WORK_DIR }}/memtool
           retention-days: 1
 
       - name: 🔍 Check Space (Post-Build)
@@ -365,6 +372,16 @@ jobs:
           git clone --depth=1 https://github.com/yougotme101/AnyKernel3 -b YASK AnyKernel3
           find ./artifacts -name "Image.*" -exec cp {} AnyKernel3/ \;
 
+          # Copiar memtool al ZIP si existe
+          MEMTOOL_BIN=$(find ./artifacts -name "memtool" -type f | head -n 1)
+          if [ -n "$MEMTOOL_BIN" ] && [ -f "$MEMTOOL_BIN" ]; then
+            cp "$MEMTOOL_BIN" AnyKernel3/memtool
+            chmod +x AnyKernel3/memtool
+            echo "✅ memtool incluido en el ZIP"
+          else
+            echo "::warning::memtool no encontrado en los artefactos"
+          fi
+
           cat > AnyKernel3/banner << 'EOF'
           ╔═════════════════════════════════════════════════════╗
           ║                     XStock Kernel                   ║
@@ -378,6 +395,7 @@ jobs:
           ║     • Droidspaces Support                           ║
           ║     • Vanilla (No-KSU)                              ║
           ║     • Metamodule & NoMount Support                  ║
+          ║     • memtool (static, CONFIG_DEVMEM)               ║
           ╚═════════════════════════════════════════════════════╝
           Installing XStock Kernel...
           EOF
@@ -411,6 +429,7 @@ jobs:
           • Optimization: \`-O2\`
           • Droidspaces: \`Enabled\`
           • NoMount: \`Enabled\`
+          • memtool: \`Included (static)\`
 
           📱 *Supported Devices:*
           • Redmi Note 12 4G/NFC
