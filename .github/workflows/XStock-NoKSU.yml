@@ -1,4 +1,4 @@
-name: "Build XStock-NoKSU"
+name: "Build DA-WI-PARAWHA-NoKSU"
 
 env:
   OUT_DIR: "out"
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build-kernels:
-    name: "🐎 Build XStock ${{ matrix.kernel.name }} kernel"
+    name: "🇵🇾 Build DA-WI-PARAWHA ${{ matrix.kernel.name }} kernel"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -27,7 +27,7 @@ jobs:
             repo_url: "https://android.googlesource.com/kernel/common"
             branch: "android13-5.15-lts"
             defconfig: "gki_defconfig"
-            local_version: "-XStock-GKI"
+            local_version: "-TECNOPROGKI"
             output_name: "Image.gki.noksu"
             enable_ksu: false
             extra_patches:
@@ -41,7 +41,7 @@ jobs:
             repo_url: "https://git.codelinaro.org/clo/la/kernel/msm-5.15.git"
             branch: "kernel.lnx.5.15.r1-rel"
             defconfig: "gki_defconfig"
-            local_version: "-XStock-CLO"
+            local_version: "-TECNOPROCLO"
             output_name: "Image.clo.noksu"
             enable_ksu: false
             extra_patches:
@@ -151,7 +151,7 @@ jobs:
 
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
 
-          # Optimizaciones base para Redmi Note 13 4G
+                    # Optimizaciones base para Redmi Note 13 4G
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
@@ -168,21 +168,34 @@ jobs:
           echo "CONFIG_PM_WAKELOCKS_GC=y" >> "$CONFIG_FILE"
           echo "CONFIG_SUSPEND=y" >> "$CONFIG_FILE"
           echo "CONFIG_SUSPEND_FREEZER=y" >> "$CONFIG_FILE"
+
+          # Compresión del kernel: solo LZ4 activo
+          echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_GZIP is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_LZO is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_XZ is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_ZSTD is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_BZIP2 is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_KERNEL_UNCOMPRESSED is not set" >> "$CONFIG_FILE"
+
+          # ZRAM con LZ4
           sed -i '/ZRAM_DEF_COMP_LZO/d' "$CONFIG_FILE"
           echo "CONFIG_CRYPTO_LZ4=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
-          echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
+          echo "CONFIG_ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
 
-          # memtool support: habilita /dev/mem
+          # Módulos: permitir cargar .ko sin firmar
+          echo "CONFIG_MODULES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MODULE_UNLOAD=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MODVERSIONS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MODULE_FORCE_LOAD=y" >> "$CONFIG_FILE"
+          echo "# CONFIG_MODULE_SIG is not set" >> "$CONFIG_FILE"
+          echo "# CONFIG_MODULE_SIG_FORCE is not set" >> "$CONFIG_FILE"
+          echo "# CONFIG_MODULE_SIG_ALL is not set" >> "$CONFIG_FILE"
+
+          # memtool support: habilita /dev/mem SIN restricciones
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
-          echo "# CONFIG_STRICT_DEVMEM=y" >> "$CONFIG_FILE"
-          echo "# CONFIG_IO_STRICT_DEVMEM=y" >> "$CONFIG_FILE"
+          echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
+          echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
 
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
@@ -425,8 +438,8 @@ jobs:
 
           cat > AnyKernel3/banner << 'EOF'
           ╔═════════════════════════════════════════════════════╗
-          ║                     XStock Kernel                   ║
-          ║                   by @yougotme101                   ║
+          ║                     DA-WI-PARAWHA Kernel                   ║
+          ║                   by @DAVI                 ║
           ║              Powered by Github Actions              ║
           ╠═════════════════════════════════════════════════════╣
           ║     Features:                                       ║
@@ -438,10 +451,10 @@ jobs:
           ║     • Metamodule & NoMount Support                  ║
           ║     • memtool (static, CONFIG_DEVMEM)               ║
           ╚═════════════════════════════════════════════════════╝
-          Installing XStock Kernel...
+          Installing DA-WI-PARAWHA Kernel...
           EOF
 
-          ZIP_NAME="AK3_XStock-AIO-FULL_NOKSU_$(date +'%Y-%m-%d').zip"
+          ZIP_NAME="AK3_TECNOPROAIO-FULL_NOKSU_$(date +'%Y-%m-%d').zip"
           cd AnyKernel3
           zip -r9 "../$ZIP_NAME" * -x .git/*
           cd ..
@@ -451,15 +464,15 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: ${{ env.ZIP_NAME }}
-          tag_name: "XStock-NoKSU"
+          tag_name: "TECNOPRONoKSU"
           generate_release_notes: true
 
       - name: "🎉 Send Telegram success notification"
         run: |
-          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/XStock-NoKSU"
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/TECNOPRONoKSU"
           BANNER_URL="https://raw.githubusercontent.com/yougotme101/kernel_msm-5.15/builder/assets/xeniel.png"
           if [[ "${{ job.status }}" == "success" ]]; then
-            MESSAGE="✅ *XStock Kernel Released*
+            MESSAGE="✅ *DA-WI-PARAWHA Kernel Released*
 
           📦 *Build Information:*
           • Kernel: \`Linux 5.15\`
@@ -489,7 +502,7 @@ jobs:
               -d disable_web_page_preview="false" \
               "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendPhoto"
           else
-            FAILURE_MSG="❌ *XStock Kernel Build Failed*
+            FAILURE_MSG="❌ *DA-WI-PARAWHA Kernel Build Failed*
 
           🕐 *Failed at:* $(date '+%Y-%m-%d %H:%M:%S UTC')
 
