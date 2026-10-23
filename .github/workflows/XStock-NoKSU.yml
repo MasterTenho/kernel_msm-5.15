@@ -66,7 +66,6 @@ jobs:
           mkdir -p ${{ env.KERNEL_LOC_DIR }}
           echo "BUILD_TIME=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
           sudo apt-get update -qq
-          # gcc-aarch64-linux-gnu y autotools son necesarios para compilar memtool estático
           sudo apt-get install -y repo rsync aria2 jq gcc-aarch64-linux-gnu autoconf automake
 
       - name: 🔍 Check Space (Before Cleanup)
@@ -151,7 +150,7 @@ jobs:
 
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
 
-          # Optimizaciones base para Redmi Note 13 4G
+          # Optimizaciones base
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
@@ -196,6 +195,43 @@ jobs:
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
           echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
+
+          # ==========================================
+          # 🔥 SOPORTE USB HID / OTG (TECLADO USB) 🔥
+          # ==========================================
+          echo "CONFIG_USB_GADGET=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_F_FS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_ACM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_UEVENT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_HID_GENERIC=y" >> "$CONFIG_FILE"
+
+          # ==========================================
+          # 🔥 SOPORTE ATAQUE BLUETOOTH (BadBT / HIDP) 🔥
+          # ==========================================
+          echo "CONFIG_BT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_BREDR=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
+          echo "CONFIG_INPUT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_HID_SUPPORT=y" >> "$CONFIG_FILE"
+
+          # Namespaces para chroot Kali
+          echo "CONFIG_NAMESPACES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_UTS_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PID_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NET_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BLK_DEV_LOOP=y" >> "$CONFIG_FILE"
+
+          # Red para NetHunter
+          echo "CONFIG_TUN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BRIDGE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_PACKET=y" >> "$CONFIG_FILE"
 
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
@@ -415,7 +451,6 @@ jobs:
           git clone --depth=1 https://github.com/yougotme101/AnyKernel3 -b YASK AnyKernel3
           find ./artifacts -name "Image.*" -exec cp {} AnyKernel3/ \;
 
-          # Copiar memtool al ZIP si existe
           MEMTOOL_BIN=$(find ./artifacts -name "memtool" -type f | head -n 1)
           if [ -n "$MEMTOOL_BIN" ] && [ -f "$MEMTOOL_BIN" ]; then
             cp "$MEMTOOL_BIN" AnyKernel3/memtool
@@ -425,7 +460,6 @@ jobs:
             echo "::warning::memtool no encontrado en los artefactos"
           fi
 
-          # Copiar driver WiFi si existe (a la ruta correcta de módulos)
           DRIVER_KO=$(find ./artifacts -name "*.ko" -type f | head -n 1)
           if [ -n "$DRIVER_KO" ] && [ -f "$DRIVER_KO" ]; then
             mkdir -p AnyKernel3/modules/vendor/lib/modules
@@ -450,6 +484,8 @@ jobs:
           ║     • Vanilla (No-KSU)                              ║
           ║     • Metamodule & NoMount Support                  ║
           ║     • memtool (static, CONFIG_DEVMEM)               ║
+          ║     • USB HID / OTG Keyboard (NetHunter)            ║
+          ║     • Bluetooth HIDP (BadBT)                        ║
           ╚═════════════════════════════════════════════════════╝
           Installing DA-WI-PARAWHA Kernel...
           EOF
@@ -484,6 +520,8 @@ jobs:
           • Droidspaces: \`Enabled\`
           • NoMount: \`Enabled\`
           • memtool: \`Included (static)\`
+          • USB HID/OTG: \`Enabled\`
+          • Bluetooth HIDP: \`Enabled\`
 
           📱 *Supported Devices:*
           • Redmi Note 12 4G/NFC
