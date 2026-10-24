@@ -167,7 +167,7 @@ jobs:
           # DNS Resolver
           echo "CONFIG_DNS_RESOLVER=y" >> "$CONFIG_FILE"
 
-          # Infrarrojos (IR) - Opciones oficiales de GKI
+          # Infrarrojos (IR)
           echo "CONFIG_RC_CORE=y" >> "$CONFIG_FILE"
           echo "CONFIG_LIRC=y" >> "$CONFIG_FILE"
           echo "CONFIG_BPF_LIRC_MODE2=y" >> "$CONFIG_FILE"
@@ -192,11 +192,20 @@ jobs:
             exit 0
           }
 
-          # Corregir la lista de módulos GKI para incluir MemKernel
-          MODULES_LIST="android/gki_aarch64_modules"
-          if [ -f "$MODULES_LIST" ] && ! grep -q "lyumvm_memk.ko" "$MODULES_LIST"; then
-            echo "drivers/memkernel/lyumvm_memk.ko" >> "$MODULES_LIST"
-            echo "✅ MemKernel agregado a gki_aarch64_modules"
+          # Detectar el nombre aleatorio del .ko generado por MemKernel
+          # MemKernel lo genera en drivers/memkernel/ con nombre aleatorio (e.g., ufcnkx_memk.ko)
+          MEMK_MOD=$(find drivers/memkernel -name "*.ko" 2>/dev/null | head -n 1)
+          if [ -n "$MEMK_MOD" ]; then
+            MEMK_ENTRY="${MEMK_MOD#./}"
+            echo "🔍 Detected MemKernel module: $MEMK_ENTRY"
+            MODULES_LIST="android/gki_aarch64_modules"
+            if [ -f "$MODULES_LIST" ] && ! grep -q "$MEMK_ENTRY" "$MODULES_LIST"; then
+              echo "$MEMK_ENTRY" >> "$MODULES_LIST"
+              echo "✅ MemKernel agregado a gki_aarch64_modules"
+            fi
+          else
+            echo "::warning::No se pudo detectar el .ko de MemKernel; la compilación puede fallar en la verificación de módulos"
+            echo "ℹ️ Esto es normal: el .ko aún no existe hasta que se compile el kernel"
           fi
 
           echo "✅ MemKernel integrated"
