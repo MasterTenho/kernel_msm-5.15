@@ -186,26 +186,18 @@ jobs:
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
           set -euo pipefail
-          echo "📦 Integrating MemKernel as loadable module..."
-          curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M || {
+          echo "📦 Integrating MemKernel as loadable module with fixed name..."
+          curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M memk || {
             echo "::warning::MemKernel setup failed"
             exit 0
           }
 
-          # Detectar el nombre aleatorio del .ko generado por MemKernel
-          # MemKernel lo genera en drivers/memkernel/ con nombre aleatorio (e.g., ufcnkx_memk.ko)
-          MEMK_MOD=$(find drivers/memkernel -name "*.ko" 2>/dev/null | head -n 1)
-          if [ -n "$MEMK_MOD" ]; then
-            MEMK_ENTRY="${MEMK_MOD#./}"
-            echo "🔍 Detected MemKernel module: $MEMK_ENTRY"
-            MODULES_LIST="android/gki_aarch64_modules"
-            if [ -f "$MODULES_LIST" ] && ! grep -q "$MEMK_ENTRY" "$MODULES_LIST"; then
-              echo "$MEMK_ENTRY" >> "$MODULES_LIST"
-              echo "✅ MemKernel agregado a gki_aarch64_modules"
-            fi
-          else
-            echo "::warning::No se pudo detectar el .ko de MemKernel; la compilación puede fallar en la verificación de módulos"
-            echo "ℹ️ Esto es normal: el .ko aún no existe hasta que se compile el kernel"
+          MEMK_ENTRY="drivers/memkernel/memk_memk.ko"
+          echo "🔍 Expected MemKernel module: $MEMK_ENTRY"
+          MODULES_LIST="android/gki_aarch64_modules"
+          if [ -f "$MODULES_LIST" ] && ! grep -q "$MEMK_ENTRY" "$MODULES_LIST"; then
+            echo "$MEMK_ENTRY" >> "$MODULES_LIST"
+            echo "✅ MemKernel agregado a gki_aarch64_modules"
           fi
 
           echo "✅ MemKernel integrated"
@@ -494,7 +486,7 @@ jobs:
           ║     • DNS Resolver                                  ║
           ║     • Infrared (IR) support                         ║
           ║     • FastCharge (USB force fast charge)            ║
-          ║     • MemKernel (LKM, random name)                  ║
+          ║     • MemKernel (LKM, fixed name)                   ║
           ║     • RTL8188EUS (TL-WN722N V4) attempt             ║
           ╚═════════════════════════════════════════════════════╝
           Installing XStock Kernel...
@@ -535,7 +527,7 @@ jobs:
           • Infrared (IR): \`Enabled\`
           • FastCharge: \`USB force fast charge\`
           • memtool: \`Included (static)\`
-          • MemKernel: \`Included (LKM, random name)\`
+          • MemKernel: \`Included (LKM, fixed name)\`
           • RTL8188EUS: \`Compilado (puede no cargar en GKI)\`
 
           📱 *Supported Devices:*
