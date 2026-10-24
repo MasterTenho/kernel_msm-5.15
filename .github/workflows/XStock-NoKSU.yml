@@ -167,15 +167,22 @@ jobs:
           # DNS Resolver
           echo "CONFIG_DNS_RESOLVER=y" >> "$CONFIG_FILE"
 
+          # Infrarrojos (IR) - Opciones oficiales de GKI
+          echo "CONFIG_RC_CORE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_LIRC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BPF_LIRC_MODE2=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RC_DECODERS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RC_DEVICES=y" >> "$CONFIG_FILE"
+
           # memtool: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
           echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
 
-          # FastCharge (para carga por USB, no afecta carga rápida por pared)
+          # FastCharge (para carga por USB)
           echo "CONFIG_FORCE_FAST_CHARGE=y" >> "$CONFIG_FILE"
 
-      - name: "🔧 Integrate MemKernel (LKM)"
+      - name: "🔧 Integrate MemKernel (LKM) + GKI module list"
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
           set -euo pipefail
@@ -184,6 +191,14 @@ jobs:
             echo "::warning::MemKernel setup failed"
             exit 0
           }
+
+          # Corregir la lista de módulos GKI para incluir MemKernel
+          MODULES_LIST="android/gki_aarch64_modules"
+          if [ -f "$MODULES_LIST" ] && ! grep -q "lyumvm_memk.ko" "$MODULES_LIST"; then
+            echo "drivers/memkernel/lyumvm_memk.ko" >> "$MODULES_LIST"
+            echo "✅ MemKernel agregado a gki_aarch64_modules"
+          fi
+
           echo "✅ MemKernel integrated"
 
       - name: '⚙️ Inject Reflex Governor'
@@ -468,6 +483,7 @@ jobs:
           ║     • memtool (static, CONFIG_DEVMEM)               ║
           ║     • NFC + Bluetooth support                       ║
           ║     • DNS Resolver                                  ║
+          ║     • Infrared (IR) support                         ║
           ║     • FastCharge (USB force fast charge)            ║
           ║     • MemKernel (LKM, random name)                  ║
           ║     • RTL8188EUS (TL-WN722N V4) attempt             ║
@@ -507,6 +523,7 @@ jobs:
           • NFC: \`Enabled\`
           • Bluetooth: \`Enabled\`
           • DNS Resolver: \`Enabled\`
+          • Infrared (IR): \`Enabled\`
           • FastCharge: \`USB force fast charge\`
           • memtool: \`Included (static)\`
           • MemKernel: \`Included (LKM, random name)\`
