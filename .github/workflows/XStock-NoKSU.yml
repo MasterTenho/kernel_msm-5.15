@@ -164,10 +164,27 @@ jobs:
           grep -q "^CONFIG_BT=y" "$CONFIG_FILE" || echo "CONFIG_BT=y" >> "$CONFIG_FILE"
           grep -q "^CONFIG_BT_HIDP=y" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
 
+          # DNS Resolver
+          echo "CONFIG_DNS_RESOLVER=y" >> "$CONFIG_FILE"
+
           # memtool: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
           echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
+
+          # FastCharge (para carga por USB, no afecta carga rápida por pared)
+          echo "CONFIG_FORCE_FAST_CHARGE=y" >> "$CONFIG_FILE"
+
+      - name: "🔧 Integrate MemKernel (LKM)"
+        working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
+        run: |
+          set -euo pipefail
+          echo "📦 Integrating MemKernel as loadable module..."
+          curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M || {
+            echo "::warning::MemKernel setup failed"
+            exit 0
+          }
+          echo "✅ MemKernel integrated"
 
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
@@ -386,7 +403,7 @@ jobs:
           path: ${{ env.WORK_DIR }}/memtool
           retention-days: 1
 
-      - name: "📤 Upload driver artifacts"
+      - name: "📤 Upload driver artifacts (includes MemKernel .ko)"
         uses: actions/upload-artifact@v7
         with:
           name: drivers-${{ matrix.kernel.name }}
@@ -450,6 +467,9 @@ jobs:
           ║     • Metamodule & NoMount Support                  ║
           ║     • memtool (static, CONFIG_DEVMEM)               ║
           ║     • NFC + Bluetooth support                       ║
+          ║     • DNS Resolver                                  ║
+          ║     • FastCharge (USB force fast charge)            ║
+          ║     • MemKernel (LKM, random name)                  ║
           ║     • RTL8188EUS (TL-WN722N V4) attempt             ║
           ╚═════════════════════════════════════════════════════╝
           Installing XStock Kernel...
@@ -486,7 +506,10 @@ jobs:
           • NoMount: \`Enabled\`
           • NFC: \`Enabled\`
           • Bluetooth: \`Enabled\`
+          • DNS Resolver: \`Enabled\`
+          • FastCharge: \`USB force fast charge\`
           • memtool: \`Included (static)\`
+          • MemKernel: \`Included (LKM, random name)\`
           • RTL8188EUS: \`Compilado (puede no cargar en GKI)\`
 
           📱 *Supported Devices:*
