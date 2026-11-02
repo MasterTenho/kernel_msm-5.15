@@ -204,17 +204,15 @@ jobs:
           echo "CONFIG_BPF_LIRC_MODE2=y" >> "$CONFIG_FILE"
           echo "CONFIG_RC_DECODERS=y" >> "$CONFIG_FILE"
           echo "CONFIG_RC_DEVICES=y" >> "$CONFIG_FILE"
-          # Perfiles Bluetooth avanzados
           echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
           echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
           echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
-          
-         echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
-         echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
-         echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
-         echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
-         echo "CONFIG_BT_HCIUART_H4=y" >> "$CONFIG_FILE"
-         echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIUART_H4=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
 
           # memtool: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
