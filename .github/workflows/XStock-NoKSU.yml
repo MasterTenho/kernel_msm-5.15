@@ -209,8 +209,6 @@ jobs:
           echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
           echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
           
-          
-         # Soporte de controlador HCI (si necesitas conectar adaptador USB externo o usar herramientas de seguridad)
          echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
