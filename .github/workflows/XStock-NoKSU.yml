@@ -381,23 +381,23 @@ jobs:
           cp ${{ env.WORK_DIR }}/out/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/modules.order \
              ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/android/gki_aarch64_modules
 
-      - name: "📡 Build RTL8188EUS driver (TP-Link TL-WN722N V4)"
+      - name: "📡 Build RTL8188FU driver (RTL8188FTV)"
         working-directory: ${{ env.WORK_DIR }}
         run: |
-          set -e
+          set +e
           echo "🔧 Preparando kernel headers para compilar módulos externos..."
           cd ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
           make ARCH=arm64 LLVM=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy STRIP=llvm-strip modules_prepare || true
           make ARCH=arm64 LLVM=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy STRIP=llvm-strip modules_install INSTALL_MOD_PATH=../ || true
 
           cd ${{ env.WORK_DIR }}
-          echo "📦 Clonando driver rtl8188eus..."
+          echo "📦 Clonando driver rtl8188fu..."
           git clone --depth=1 https://github.com/kelebek333/rtl8188fu.git rtl8188fu-src || {
-            echo "::warning::No se pudo clonar rtl8188eus"
+            echo "::warning::No se pudo clonar rtl8188fu"
             exit 0
           }
 
-          cd rtl8188eus-src
+          cd rtl8188fu-src
 
           export ARCH=arm64
           export SUBARCH=arm64
@@ -408,15 +408,15 @@ jobs:
           sed -i "s|^KSRC :=.*|KSRC := ${{ env.WORK_DIR }}/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}|" Makefile
 
           make -j$(nproc) || {
-            echo "::warning::Falló la compilación del driver RTL8188EUS (esperado en GKI sin cfg80211/mac80211)"
+            echo "::warning::Falló la compilación del driver RTL8188FU (puede requerir parches para 5.15)"
             exit 0
           }
 
-          find . -name "8188eu.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
+          find . -name "rtl8188fu.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
           if ls "${{ env.WORK_DIR }}"/*.ko 1>/dev/null 2>&1; then
-            echo "✅ Driver RTL8188EUS compilado"
+            echo "✅ Driver RTL8188FU compilado"
           else
-            echo "::warning::No se generó 8188eu.ko"
+            echo "::warning::No se generó rtl8188fu.ko"
           fi
 
       - name: "🔧 Build memtool (static)"
@@ -518,7 +518,7 @@ jobs:
 
           cat > AnyKernel3/banner << 'EOF'
           ╔═════════════════════════════════════════════════════╗
-          ║                     XStock Kernel                   ║
+          ║                  DaWixTechno Kernel                 ║
           ║                   by @yougotme101                   ║
           ║              Powered by Github Actions              ║
           ╠═════════════════════════════════════════════════════╣
