@@ -384,7 +384,7 @@ jobs:
 
           cd ${{ env.WORK_DIR }}
           echo "📦 Clonando driver rtl8188eus..."
-          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git rtl8188eus-src || {
+          git clone --depth=1 https://github.com/kelebek333/rtl8188fu.git rtl8188fu-src || {
             echo "::warning::No se pudo clonar rtl8188eus"
             exit 0
           }
