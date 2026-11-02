@@ -27,8 +27,8 @@ jobs:
             repo_url: "https://android.googlesource.com/kernel/common"
             branch: "android13-5.15-lts"
             defconfig: "gki_defconfig"
-            local_version: "-XStock-GKI"
-            output_name: "Image.gki.noksu"
+            local_version: "-DaWixTechno"
+            output_name: "Image.DaWixTechno"
             enable_ksu: false
             extra_patches:
               - "https://raw.githubusercontent.com/topnotchfreaks/kernel_patches/main/0001-gki-fixup.patch"
@@ -154,8 +154,38 @@ jobs:
           echo "# CONFIG_KERNEL_UNCOMPRESSED is not set" >> "$CONFIG_FILE"
           sed -i '/ZRAM_DEF_COMP_LZO/d' "$CONFIG_FILE"
           echo "CONFIG_CRYPTO_LZ4=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MAC80211_MESH=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETLINK_DIAG=y" >> "$CONFIG_FILE"
+          echo "CONFIG_VSOCKETS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MODULE_UNLOAD=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MODULES=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+          echo "CONFIG_USB_CONFIGFS_RNDIS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MEDIA_RADIO_SUPPORT=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RADIO_IRIS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_RADIO_IRIS_TRANSPORT=y" >> "$CONFIG_FILE"
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KALLSYMS_ALL=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IP_NF_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
+          echo "CONFIG_NETFILTER_XT_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
+          # Límites de recursos
+          echo "CONFIG_CFS_BANDWIDTH=y" >> "$CONFIG_FILE"
+          # IPC y colas de mensajes (esenciales para systemd/PostgreSQL)
+          echo "CONFIG_SYSVIPC=y" >> "$CONFIG_FILE"
+          echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"
+          
+          # Espacios de nombres (esenciales para contenedores)
+          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_MAC80211=y" >> "$CONFIG_FILE"
+          echo "CONFIG_CFG80211=y" >> "$CONFIG_FILE"
+          
+          # Sistema de archivos y dispositivos
+          echo "CONFIG_DEVTMPFS=y" >> "$CONFIG_FILE"
+          # CONFIG_TMPFS_XATTR y CONFIG_TMPFS_POSIX_ACL ya los tienes
 
           # NFC
           echo "CONFIG_NFC=y" >> "$CONFIG_FILE"
@@ -163,6 +193,7 @@ jobs:
           # Bluetooth
           grep -q "^CONFIG_BT=y" "$CONFIG_FILE" || echo "CONFIG_BT=y" >> "$CONFIG_FILE"
           grep -q "^CONFIG_BT_HIDP=y" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
+          
 
           # DNS Resolver
           echo "CONFIG_DNS_RESOLVER=y" >> "$CONFIG_FILE"
@@ -173,6 +204,19 @@ jobs:
           echo "CONFIG_BPF_LIRC_MODE2=y" >> "$CONFIG_FILE"
           echo "CONFIG_RC_DECODERS=y" >> "$CONFIG_FILE"
           echo "CONFIG_RC_DEVICES=y" >> "$CONFIG_FILE"
+          # Perfiles Bluetooth avanzados
+          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
+          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
+          
+          
+         # Soporte de controlador HCI (si necesitas conectar adaptador USB externo o usar herramientas de seguridad)
+         echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
+         echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
+         echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
+         echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
+         echo "CONFIG_BT_HCIUART_H4=y" >> "$CONFIG_FILE"
+         echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
 
           # memtool: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
@@ -492,7 +536,7 @@ jobs:
           Installing XStock Kernel...
           EOF
 
-          ZIP_NAME="AK3_XStock-AIO-FULL_NOKSU_$(date +'%Y-%m-%d').zip"
+          ZIP_NAME="AK3_DaWixTechno_$(date +'%Y-%m-%d').zip"
           cd AnyKernel3
           zip -r9 "../$ZIP_NAME" * -x .git/*
           cd ..
@@ -557,5 +601,5 @@ jobs:
               -d photo="${BANNER_URL}" \
               --data-urlencode "caption=${FAILURE_MSG}" \
               -d parse_mode="Markdown" \
-              "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendPhoto"
+              
           fi
