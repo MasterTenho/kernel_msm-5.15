@@ -136,6 +136,10 @@ jobs:
           echo "CONFIG_TCP_CONG_WESTWOOD=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_HTCP=n" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BBR=y" >> "$CONFIG_FILE"
+          echo "# CONFIG_MEDIA_TUNER is not set" >> "$CONFIG_FILE"
+          echo "# CONFIG_MEDIA_TUNER_SIMPLE is not set" >> "$CONFIG_FILE"
+          echo "# CONFIG_MEDIA_TUNER_TDA18250 is not set" >> "$CONFIG_FILE"
+          echo "# CONFIG_MEDIA_TUNER_R820T is not set" >> "$CONFIG_FILE"
           echo "CONFIG_DEFAULT_BBR=y" >> "$CONFIG_FILE"
           echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
@@ -372,6 +376,10 @@ jobs:
           LTO=full \
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
+
+          # Actualizar la lista de módulos GKI para evitar el error "modules list out of date"
+          cp ${{ env.WORK_DIR }}/out/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/modules.order \
+             ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/android/gki_aarch64_modules
 
       - name: "📡 Build RTL8188EUS driver (TP-Link TL-WN722N V4)"
         working-directory: ${{ env.WORK_DIR }}
