@@ -27,7 +27,7 @@ jobs:
             repo_url: "https://android.googlesource.com/kernel/common"
             branch: "android13-5.15-lts"
             defconfig: "gki_defconfig"
-            local_version: "-XStock-GKI"
+            local_version: "-DawiXTech"
             output_name: "Image.gki.noksu"
             enable_ksu: false
             extra_patches:
@@ -128,6 +128,7 @@ jobs:
           done
 
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KALLSYMS_ALL=y" >> "$CONFIG_FILE"
 
           # Optimizaciones base
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
@@ -136,10 +137,6 @@ jobs:
           echo "CONFIG_TCP_CONG_WESTWOOD=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_HTCP=n" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BBR=y" >> "$CONFIG_FILE"
-          echo "# CONFIG_MEDIA_TUNER is not set" >> "$CONFIG_FILE"
-          echo "# CONFIG_MEDIA_TUNER_SIMPLE is not set" >> "$CONFIG_FILE"
-          echo "# CONFIG_MEDIA_TUNER_TDA18250 is not set" >> "$CONFIG_FILE"
-          echo "# CONFIG_MEDIA_TUNER_R820T is not set" >> "$CONFIG_FILE"
           echo "CONFIG_DEFAULT_BBR=y" >> "$CONFIG_FILE"
           echo "CONFIG_OVERLAY_FS=y" >> "$CONFIG_FILE"
           echo "CONFIG_TMPFS_XATTR=y" >> "$CONFIG_FILE"
@@ -158,49 +155,24 @@ jobs:
           echo "# CONFIG_KERNEL_UNCOMPRESSED is not set" >> "$CONFIG_FILE"
           sed -i '/ZRAM_DEF_COMP_LZO/d' "$CONFIG_FILE"
           echo "CONFIG_CRYPTO_LZ4=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211_WEXT=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211_MESH=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETLINK_DIAG=y" >> "$CONFIG_FILE"
-          echo "CONFIG_VSOCKETS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MODULE_UNLOAD=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MODULES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_RNDIS=y" >> "$CONFIG_FILE"
-          echo "# CONFIG_MEDIA_RADIO_SUPPORT is not set" >> "$CONFIG_FILE"
-          echo "# CONFIG_RADIO_IRIS is not set" >> "$CONFIG_FILE"
-          echo "# CONFIG_RADIO_IRIS_TRANSPORT is not set" >> "$CONFIG_FILE"
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KALLSYMS_ALL=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MACVLAN=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IP_NF_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_NETFILTER_XT_TARGET_MASQUERADE=y" >> "$CONFIG_FILE"
-          # Límites de recursos
-          echo "CONFIG_CFS_BANDWIDTH=y" >> "$CONFIG_FILE"
-          # IPC y colas de mensajes (esenciales para systemd/PostgreSQL)
-          echo "CONFIG_SYSVIPC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_POSIX_MQUEUE=y" >> "$CONFIG_FILE"
-          
-          # Espacios de nombres (esenciales para contenedores)
-          echo "CONFIG_USER_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_IPC_NS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_MAC80211=y" >> "$CONFIG_FILE"
-          echo "CONFIG_CFG80211=y" >> "$CONFIG_FILE"
-          
-          # Sistema de archivos y dispositivos
-          echo "CONFIG_DEVTMPFS=y" >> "$CONFIG_FILE"
-          # CONFIG_TMPFS_XATTR y CONFIG_TMPFS_POSIX_ACL ya los tienes
 
-          # NFC
-          echo "CONFIG_NFC=y" >> "$CONFIG_FILE"
+          # NFC (module form, GKI standard)
+          grep -q "^CONFIG_NFC=m" "$CONFIG_FILE" || echo "CONFIG_NFC=m" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_NFC_DIGITAL=m" "$CONFIG_FILE" || echo "CONFIG_NFC_DIGITAL=m" >> "$CONFIG_FILE"
 
-          # Bluetooth
-          grep -q "^CONFIG_BT=y" "$CONFIG_FILE" || echo "CONFIG_BT=y" >> "$CONFIG_FILE"
-          grep -q "^CONFIG_BT_HIDP=y" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
-          
+          # Bluetooth (module + security/debug support)
+          grep -q "^CONFIG_BT=m" "$CONFIG_FILE" || echo "CONFIG_BT=m" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_BT_BREDR=y" "$CONFIG_FILE" || echo "CONFIG_BT_BREDR=y" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_BT_HIDP=m" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=m" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_BT_RFCOMM=m" "$CONFIG_FILE" || echo "CONFIG_BT_RFCOMM=m" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_BT_BNEP=m" "$CONFIG_FILE" || echo "CONFIG_BT_BNEP=m" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_BT_DEBUGFS=y" "$CONFIG_FILE" || echo "CONFIG_BT_DEBUGFS=y" >> "$CONFIG_FILE"
 
           # DNS Resolver
           echo "CONFIG_DNS_RESOLVER=y" >> "$CONFIG_FILE"
+          # DNS Resolver
 
           # Infrarrojos (IR)
           echo "CONFIG_RC_CORE=y" >> "$CONFIG_FILE"
@@ -208,15 +180,6 @@ jobs:
           echo "CONFIG_BPF_LIRC_MODE2=y" >> "$CONFIG_FILE"
           echo "CONFIG_RC_DECODERS=y" >> "$CONFIG_FILE"
           echo "CONFIG_RC_DEVICES=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_RFCOMM=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_RFCOMM_TTY=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_BNEP=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
-          echo "CONFIG_USB_CONFIGFS_F_HID=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIUART_H4=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BT_HCIBTUSB=y" >> "$CONFIG_FILE"
 
           # memtool: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
@@ -377,24 +340,23 @@ jobs:
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
 
-
-      - name: "📡 Build RTL8188FU driver (RTL8188FTV)"
+      - name: "📡 Build RTL8188EUS driver (TP-Link TL-WN722N V4)"
         working-directory: ${{ env.WORK_DIR }}
         run: |
-          set +e
+          set -e
           echo "🔧 Preparando kernel headers para compilar módulos externos..."
           cd ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
           make ARCH=arm64 LLVM=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy STRIP=llvm-strip modules_prepare || true
           make ARCH=arm64 LLVM=1 CC=clang AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy STRIP=llvm-strip modules_install INSTALL_MOD_PATH=../ || true
 
           cd ${{ env.WORK_DIR }}
-          echo "📦 Clonando driver rtl8188fu..."
-          git clone --depth=1 https://github.com/kelebek333/rtl8188fu.git rtl8188fu-src || {
-            echo "::warning::No se pudo clonar rtl8188fu"
+          echo "📦 Clonando driver rtl8188eus..."
+          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus.git rtl8188eus-src || {
+            echo "::warning::No se pudo clonar rtl8188eus"
             exit 0
           }
 
-          cd rtl8188fu-src
+          cd rtl8188eus-src
 
           export ARCH=arm64
           export SUBARCH=arm64
@@ -405,15 +367,15 @@ jobs:
           sed -i "s|^KSRC :=.*|KSRC := ${{ env.WORK_DIR }}/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}|" Makefile
 
           make -j$(nproc) || {
-            echo "::warning::Falló la compilación del driver RTL8188FU (puede requerir parches para 5.15)"
+            echo "::warning::Falló la compilación del driver RTL8188EUS (esperado en GKI sin cfg80211/mac80211)"
             exit 0
           }
 
-          find . -name "rtl8188fu.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
+          find . -name "8188eu.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
           if ls "${{ env.WORK_DIR }}"/*.ko 1>/dev/null 2>&1; then
-            echo "✅ Driver RTL8188FU compilado"
+            echo "✅ Driver RTL8188EUS compilado"
           else
-            echo "::warning::No se generó rtl8188fu.ko"
+            echo "::warning::No se generó 8188eu.ko"
           fi
 
       - name: "🔧 Build memtool (static)"
@@ -515,7 +477,7 @@ jobs:
 
           cat > AnyKernel3/banner << 'EOF'
           ╔═════════════════════════════════════════════════════╗
-          ║                  DaWixTechno Kernel                 ║
+          ║                     XStock Kernel                   ║
           ║                   by @yougotme101                   ║
           ║              Powered by Github Actions              ║
           ╠═════════════════════════════════════════════════════╣
@@ -537,7 +499,7 @@ jobs:
           Installing XStock Kernel...
           EOF
 
-          ZIP_NAME="AK3_DaWixTechno_$(date +'%Y-%m-%d').zip"
+          ZIP_NAME="AK3_XStock-AIO-FULL_NOKSU_$(date +'%Y-%m-%d').zip"
           cd AnyKernel3
           zip -r9 "../$ZIP_NAME" * -x .git/*
           cd ..
@@ -602,5 +564,4 @@ jobs:
               -d photo="${BANNER_URL}" \
               --data-urlencode "caption=${FAILURE_MSG}" \
               -d parse_mode="Markdown" \
-              
           fi
