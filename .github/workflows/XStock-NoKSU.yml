@@ -172,7 +172,6 @@ jobs:
 
           # DNS Resolver
           echo "CONFIG_DNS_RESOLVER=y" >> "$CONFIG_FILE"
-          # DNS Resolver
 
           # Infrarrojos (IR)
           echo "CONFIG_RC_CORE=y" >> "$CONFIG_FILE"
@@ -332,6 +331,42 @@ jobs:
         working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
         run: |
          echo 'KBUILD_CFLAGS += -Wno-implicit-function-declaration' >> Makefile
+
+      - name: "📋 Update GKI modules list (Bluetooth/NFC)"
+        working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
+        run: |
+          MODULES_LIST="android/gki_aarch64_modules"
+          if [ ! -f "$MODULES_LIST" ]; then
+            echo "::warning::$MODULES_LIST not found, skipping"
+            exit 0
+          fi
+
+          NEW_MODULES=(
+            "crypto/cmac.ko"
+            "crypto/ecc.ko"
+            "crypto/ecdh_generic.ko"
+            "drivers/bluetooth/hci_uart.ko"
+            "drivers/bluetooth/btsdio.ko"
+            "drivers/bluetooth/btbcm.ko"
+            "drivers/bluetooth/btqca.ko"
+            "net/bluetooth/bluetooth.ko"
+            "net/bluetooth/rfcomm/rfcomm.ko"
+            "net/bluetooth/bnep/bnep.ko"
+            "net/bluetooth/hidp/hidp.ko"
+            "net/nfc/nfc.ko"
+            "net/nfc/nfc_digital.ko"
+            "lib/crc-itu-t.ko"
+          )
+
+          for mod in "${NEW_MODULES[@]}"; do
+            if ! grep -qxF "$mod" "$MODULES_LIST"; then
+              echo "$mod" >> "$MODULES_LIST"
+              echo "✅ Añadido: $mod"
+            fi
+          done
+
+          sort -o "$MODULES_LIST" "$MODULES_LIST"
+          echo "✅ Lista de módulos actualizada"
 
       - name: "🔨 Build kernel"
         working-directory: ${{ env.WORK_DIR }}
