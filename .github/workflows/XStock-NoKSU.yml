@@ -27,7 +27,7 @@ jobs:
             repo_url: "https://android.googlesource.com/kernel/common"
             branch: "android13-5.15-lts"
             defconfig: "gki_defconfig"
-            local_version: "-DawiXTech"
+            local_version: "-DawiXTechno"
             output_name: "Image.gki.noksu"
             enable_ksu: false
             extra_patches:
@@ -79,6 +79,13 @@ jobs:
           git clone --recursive --branch ${{ env.KERNEL_BRANCH }} \
             ${{ env.KERNEL_REPO }} ${{ env.KERNEL_NAME }} --depth=1
 
+      - name: "📡 Apply mac80211 injection patch"
+        working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
+        run: |
+          curl -L -o injection.patch \
+            "https://github.com/dabao1955/kernel_build_action/raw/main/nethunter/add-wifi-injection.patch"
+          git apply injection.patch || echo "::warning::El parche de inyección no se aplicó, revisa el log"
+
       - name: "📥 Initialize AOSP repo and toolchains"
         working-directory: ${{ env.WORK_DIR }}
         run: |
@@ -128,9 +135,8 @@ jobs:
           done
 
           echo "CONFIG_KALLSYMS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_KALLSYMS_ALL=y" >> "$CONFIG_FILE"
 
-          # Optimizaciones base
+          # Optimizaciones base para Redmi Note 13 4G
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_ADVANCED=y" >> "$CONFIG_FILE"
           echo "CONFIG_TCP_CONG_BIC=n" >> "$CONFIG_FILE"
@@ -157,56 +163,19 @@ jobs:
           echo "CONFIG_CRYPTO_LZ4=y" >> "$CONFIG_FILE"
           echo "CONFIG_KERNEL_LZ4=y" >> "$CONFIG_FILE"
           echo "ZRAM_DEF_COMP_LZ4=y" >> "$CONFIG_FILE"
+          echo "CONFIG_KALLSYMS_ALL" >> "$CONFIG_FILE"
 
-          # NFC (module form, GKI standard)
-          grep -q "^CONFIG_NFC=m" "$CONFIG_FILE" || echo "CONFIG_NFC=m" >> "$CONFIG_FILE"
-          grep -q "^CONFIG_NFC_DIGITAL=m" "$CONFIG_FILE" || echo "CONFIG_NFC_DIGITAL=m" >> "$CONFIG_FILE"
+          # NFC support
+          echo "CONFIG_NFC=y" >> "$CONFIG_FILE"
 
-          # Bluetooth (module + security/debug support)
-          grep -q "^CONFIG_BT=m" "$CONFIG_FILE" || echo "CONFIG_BT=m" >> "$CONFIG_FILE"
-          grep -q "^CONFIG_BT_BREDR=y" "$CONFIG_FILE" || echo "CONFIG_BT_BREDR=y" >> "$CONFIG_FILE"
-          grep -q "^CONFIG_BT_HIDP=m" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=m" >> "$CONFIG_FILE"
-          grep -q "^CONFIG_BT_RFCOMM=m" "$CONFIG_FILE" || echo "CONFIG_BT_RFCOMM=m" >> "$CONFIG_FILE"
-          grep -q "^CONFIG_BT_BNEP=m" "$CONFIG_FILE" || echo "CONFIG_BT_BNEP=m" >> "$CONFIG_FILE"
-          grep -q "^CONFIG_BT_DEBUGFS=y" "$CONFIG_FILE" || echo "CONFIG_BT_DEBUGFS=y" >> "$CONFIG_FILE"
+          # Bluetooth support (si ya existe, no se duplica)
+          grep -q "^CONFIG_BT=y" "$CONFIG_FILE" || echo "CONFIG_BT=y" >> "$CONFIG_FILE"
+          grep -q "^CONFIG_BT_HIDP=y" "$CONFIG_FILE" || echo "CONFIG_BT_HIDP=y" >> "$CONFIG_FILE"
 
-          # DNS Resolver
-          echo "CONFIG_DNS_RESOLVER=y" >> "$CONFIG_FILE"
-
-          # Infrarrojos (IR)
-          echo "CONFIG_RC_CORE=y" >> "$CONFIG_FILE"
-          echo "CONFIG_LIRC=y" >> "$CONFIG_FILE"
-          echo "CONFIG_BPF_LIRC_MODE2=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RC_DECODERS=y" >> "$CONFIG_FILE"
-          echo "CONFIG_RC_DEVICES=y" >> "$CONFIG_FILE"
-
-          # memtool: habilita /dev/mem
+          # memtool support: habilita /dev/mem
           echo "CONFIG_DEVMEM=y" >> "$CONFIG_FILE"
           echo "# CONFIG_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
           echo "# CONFIG_IO_STRICT_DEVMEM is not set" >> "$CONFIG_FILE"
-
-          # FastCharge (para carga por USB)
-          echo "CONFIG_FORCE_FAST_CHARGE=y" >> "$CONFIG_FILE"
-
-      - name: "🔧 Integrate MemKernel (LKM) + GKI module list"
-        working-directory: ${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}
-        run: |
-          set -euo pipefail
-          echo "📦 Integrating MemKernel as loadable module with fixed name..."
-          curl -LSs "https://raw.githubusercontent.com/Poko-Apps/MemKernel/main/kernel/setup.sh" | bash -s M memk || {
-            echo "::warning::MemKernel setup failed"
-            exit 0
-          }
-
-          MEMK_ENTRY="drivers/memkernel/memk_memk.ko"
-          echo "🔍 Expected MemKernel module: $MEMK_ENTRY"
-          MODULES_LIST="android/gki_aarch64_modules"
-          if [ -f "$MODULES_LIST" ] && ! grep -q "$MEMK_ENTRY" "$MODULES_LIST"; then
-            echo "$MEMK_ENTRY" >> "$MODULES_LIST"
-            echo "✅ MemKernel agregado a gki_aarch64_modules"
-          fi
-
-          echo "✅ MemKernel integrated"
 
       - name: '⚙️ Inject Reflex Governor'
         shell: bash
@@ -227,7 +196,8 @@ jobs:
             printf "\tdepends on CPU_FREQ && SMP\n" >> "drivers/cpufreq/Kconfig"
             printf "\tselect CPU_FREQ_GOV_ATTR_SET\n" >> "drivers/cpufreq/Kconfig"
             printf "\thelp\n" >> "drivers/cpufreq/Kconfig"
-            printf "\t  'reflex' is an advanced CPU frequency governor based on schedutil.\n" >> "drivers/cpufreq/Kconfig"
+            printf "\t  'reflex' is an advanced CPU frequency governor based on schedutil,\n" >> "drivers/cpufreq/Kconfig"
+            printf "\t  featuring idle-time accounting and PELT-complementary exponential decay.\n" >> "drivers/cpufreq/Kconfig"
           fi
 
           CONFIG_FILE="arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"
@@ -259,7 +229,8 @@ jobs:
             printf "\tdepends on CPU_FREQ && SMP\n" >> "drivers/cpufreq/Kconfig"
             printf "\tselect CPU_FREQ_GOV_ATTR_SET\n" >> "drivers/cpufreq/Kconfig"
             printf "\thelp\n" >> "drivers/cpufreq/Kconfig"
-            printf "\t  'vorpal' is a schedutil-based governor tuned for gaming.\n" >> "drivers/cpufreq/Kconfig"
+            printf "\t  'vorpal' is a schedutil-based governor tuned for\n" >> "drivers/cpufreq/Kconfig"
+            printf "\t  gaming/thermal-aware dual-profile operation.\n" >> "drivers/cpufreq/Kconfig"
           fi
 
           CONFIG_FILE="arch/arm64/configs/${{ env.DEFCONFIG_NAME }}"
@@ -334,19 +305,10 @@ jobs:
 
       - name: "🔨 Build kernel"
         working-directory: ${{ env.WORK_DIR }}
-        continue-on-error: true
         run: |
           LTO=full \
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
-
-      - name: "📁 Copy Vanilla kernel image"
-        if: matrix.kernel.enable_ksu == false
-        working-directory: ${{ env.WORK_DIR }}
-        run: |
-          mkdir -p out/dist
-          cp "${{ env.IMAGE_PATH }}" "out/dist/${{ env.OUTPUT_NAME }}"
-          echo "✅ Copiado: out/dist/${{ env.OUTPUT_NAME }}"
 
       - name: "📡 Build RTL8188EUS driver (TP-Link TL-WN722N V4)"
         working-directory: ${{ env.WORK_DIR }}
@@ -386,6 +348,23 @@ jobs:
             echo "::warning::No se generó 8188eu.ko"
           fi
 
+      - name: "📡 Build RTL8812AU driver (monitor + injection)"
+        working-directory: ${{ env.WORK_DIR }}
+        run: |
+          set -e
+          git clone --depth=1 -b v5.6.4.2 https://github.com/aircrack-ng/rtl8812au.git rtl8812au-src
+          cd rtl8812au-src
+          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
+          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+               KSRC=${{ env.WORK_DIR }}/${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }} \
+               -j$(nproc) || {
+            echo "::warning::Falló la compilación del driver RTL8812AU"
+            exit 0
+          }
+          find . -name "*.ko" -exec cp {} "${{ env.WORK_DIR }}/" \; 2>/dev/null || true
+          echo "✅ Driver RTL8812AU compilado (si es que compiló)"
+
       - name: "🔧 Build memtool (static)"
         working-directory: ${{ env.WORK_DIR }}
         run: |
@@ -416,28 +395,26 @@ jobs:
 
       - name: "📁 Copy Vanilla kernel image"
         if: matrix.kernel.enable_ksu == false
-        working-directory: ${{ env.WORK_DIR }}
+        working-directory: ${{ env.WORK_DIR }}/out/dist
         run: |
-          mkdir -p out/dist
-          cp "${{ env.IMAGE_PATH }}" "out/dist/${{ env.OUTPUT_NAME }}"
-          echo "✅ Copiado: out/dist/${{ env.OUTPUT_NAME }}"
+          cp Image "${{ env.OUTPUT_NAME }}"
 
       - name: "📤 Upload kernel artifact"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.kernel.name }}-kernel
           path: ${{ env.WORK_DIR }}/out/dist/${{ env.OUTPUT_NAME }}
           retention-days: 1
 
       - name: "📤 Upload memtool artifact"
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: memtool-${{ matrix.kernel.name }}
           path: ${{ env.WORK_DIR }}/memtool
           retention-days: 1
 
-      - name: "📤 Upload driver artifacts (includes MemKernel .ko)"
-        uses: actions/upload-artifact@v7
+      - name: "📤 Upload driver artifacts"
+        uses: actions/upload-artifact@v6
         with:
           name: drivers-${{ matrix.kernel.name }}
           path: ${{ env.WORK_DIR }}/*.ko
@@ -500,10 +477,6 @@ jobs:
           ║     • Metamodule & NoMount Support                  ║
           ║     • memtool (static, CONFIG_DEVMEM)               ║
           ║     • NFC + Bluetooth support                       ║
-          ║     • DNS Resolver                                  ║
-          ║     • Infrared (IR) support                         ║
-          ║     • FastCharge (USB force fast charge)            ║
-          ║     • MemKernel (LKM, fixed name)                   ║
           ║     • RTL8188EUS (TL-WN722N V4) attempt             ║
           ╚═════════════════════════════════════════════════════╝
           Installing XStock Kernel...
@@ -540,11 +513,7 @@ jobs:
           • NoMount: \`Enabled\`
           • NFC: \`Enabled\`
           • Bluetooth: \`Enabled\`
-          • DNS Resolver: \`Enabled\`
-          • Infrared (IR): \`Enabled\`
-          • FastCharge: \`USB force fast charge\`
           • memtool: \`Included (static)\`
-          • MemKernel: \`Included (LKM, fixed name)\`
           • RTL8188EUS: \`Compilado (puede no cargar en GKI)\`
 
           📱 *Supported Devices:*
@@ -562,7 +531,6 @@ jobs:
               --data-urlencode "caption=${MESSAGE}" \
               -d parse_mode="Markdown" \
               -d disable_web_page_preview="false" \
-              "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendPhoto"
           else
             FAILURE_MSG="❌ *XStock Kernel Build Failed*
 
