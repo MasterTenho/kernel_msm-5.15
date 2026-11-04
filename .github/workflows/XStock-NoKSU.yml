@@ -340,15 +340,13 @@ jobs:
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
 
-      - name: "✅ Verify kernel image"
+      - name: "📁 Copy Vanilla kernel image"
+        if: matrix.kernel.enable_ksu == false
         working-directory: ${{ env.WORK_DIR }}
         run: |
-          if [ -f "out/dist/Image" ]; then
-            echo "✅ El kernel Image se generó correctamente. Ignorando el error de verificación de módulos."
-          else
-            echo "❌ El kernel Image NO se generó. El build falló de verdad."
-            exit 1
-          fi
+          mkdir -p out/dist
+          cp "${{ env.IMAGE_PATH }}" "out/dist/${{ env.OUTPUT_NAME }}"
+          echo "✅ Copiado: out/dist/${{ env.OUTPUT_NAME }}"
 
       - name: "📡 Build RTL8188EUS driver (TP-Link TL-WN722N V4)"
         working-directory: ${{ env.WORK_DIR }}
@@ -418,9 +416,11 @@ jobs:
 
       - name: "📁 Copy Vanilla kernel image"
         if: matrix.kernel.enable_ksu == false
-        working-directory: ${{ env.WORK_DIR }}/out/dist
+        working-directory: ${{ env.WORK_DIR }}
         run: |
-          cp Image "${{ env.OUTPUT_NAME }}"
+          mkdir -p out/dist
+          cp "${{ env.IMAGE_PATH }}" "out/dist/${{ env.OUTPUT_NAME }}"
+          echo "✅ Copiado: out/dist/${{ env.OUTPUT_NAME }}"
 
       - name: "📤 Upload kernel artifact"
         uses: actions/upload-artifact@v7
