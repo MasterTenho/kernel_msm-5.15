@@ -334,24 +334,20 @@ jobs:
 
       - name: "🔨 Build kernel"
         working-directory: ${{ env.WORK_DIR }}
+        continue-on-error: true
         run: |
-          set +e
           LTO=full \
           BUILD_CONFIG=${{ env.KERNEL_LOC_DIR }}/${{ env.KERNEL_NAME }}/build.config.gki.aarch64 \
           build/build.sh -j$(nproc --all)
-          BUILD_EXIT=$?
-          set -e
 
-          if [ $BUILD_EXIT -ne 0 ]; then
-            echo "⚠️ build.sh terminó con error ($BUILD_EXIT)."
-            echo "Verificando si el kernel Image se generó igualmente..."
-
-            if [ -f "out/dist/Image" ]; then
-              echo "✅ El kernel Image se generó correctamente. Ignorando el error de verificación de módulos."
-            else
-              echo "❌ El kernel Image NO se generó. El build falló de verdad."
-              exit $BUILD_EXIT
-            fi
+      - name: "✅ Verify kernel image"
+        working-directory: ${{ env.WORK_DIR }}
+        run: |
+          if [ -f "out/dist/Image" ]; then
+            echo "✅ El kernel Image se generó correctamente. Ignorando el error de verificación de módulos."
+          else
+            echo "❌ El kernel Image NO se generó. El build falló de verdad."
+            exit 1
           fi
 
       - name: "📡 Build RTL8188EUS driver (TP-Link TL-WN722N V4)"
